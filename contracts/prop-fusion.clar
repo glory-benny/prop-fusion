@@ -242,3 +242,88 @@
     (asserts! (is-valid-asset-id asset-id) ERR-INVALID-INPUT)
     (asserts! (is-valid-principal to-principal) ERR-INVALID-INPUT)
     (asserts! (get is-transferable asset) ERR-UNAUTHORIZED)
+    (asserts! (is-compliance-check-passed asset-id to-principal)
+      ERR-COMPLIANCE-CHECK-FAILED
+    )
+    (asserts! (>= sender-shares amount) ERR-INSUFFICIENT-SHARES)
+
+    ;; Execute Atomic Share Transfer
+    (set-shares asset-id sender (- sender-shares amount))
+    (set-shares asset-id to-principal
+      (+ (get-shares asset-id to-principal) amount)
+    )
+
+    ;; Record Transfer Event
+    (unwrap! (log-event u"TRANSFER" asset-id sender) ERR-EVENT-LOGGING)
+
+    ;; Handle Complete Ownership Transfer
+    (if (is-eq sender-shares amount)
+      (unwrap! (nft-transfer? asset-ownership-token asset-id sender to-principal)
+        ERR-TRANSFER-FAILED
+      )
+      true
+    )
+
+    (ok true)
+  )
+)
+
+;; Regulatory Compliance Management: Advanced KYC/AML status administration
+(define-public (set-compliance-status
+    (asset-id uint)
+    (user principal)
+    (is-approved bool)
+  )
+  (begin
+    ;; Administrative Authorization Check
+    (asserts! (is-valid-asset-id asset-id) ERR-INVALID-INPUT)
+    (asserts! (is-valid-principal user) ERR-INVALID-INPUT)
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-UNAUTHORIZED)
+
+    ;; Update Compliance Registry
+    (map-set compliance-status {
+      asset-id: asset-id,
+      user: user,
+    } {
+      is-approved: is-approved,
+      last-updated: stacks-block-height,
+      approved-by: tx-sender,
+    })
+
+    ;; Log Compliance Status Change
+    (unwrap! (log-event u"COMPLIANCE_UPDATE" asset-id user) ERR-EVENT-LOGGING)
+
+    (ok is-approved)
+  )
+)
+
+;; COMPREHENSIVE QUERY INTERFACE
+
+;; Asset Information Retrieval System
+(define-read-only (get-asset-details (asset-id uint))
+  (map-get? asset-registry { asset-id: asset-id })
+)
+
+;; Ownership Balance Query Engine
+(define-read-only (get-owner-shares
+    (asset-id uint)
+    (owner principal)
+  )
+  (ok (get-shares asset-id owner))
+)
+
+;; Compliance Status Investigation
+(define-read-only (get-compliance-details
+    (asset-id uint)
+    (user principal)
+  )
+  (map-get? compliance-status {
+    asset-id: asset-id,
+    user: user,
+  })
+)
+
+;; Event History Analysis
+(define-read-only (get-event (event-id uint))
+  (map-get? events { event-id: event-id })
+)
